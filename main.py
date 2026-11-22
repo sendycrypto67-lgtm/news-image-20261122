@@ -14,6 +14,7 @@ import os
 import shutil
 import struct
 import sys
+import zlib
 
 MAX_BYTES = 1048576
 MAX_SIDE = 1024
@@ -36,7 +37,17 @@ def read_dimensions(data, path):
         fail(path + " has no IHDR chunk where one is expected")
     if ihdr_len != 13:
         fail(path + " has an IHDR chunk of length %d, expected 13" % ihdr_len)
+    stored_crc = struct.unpack(">I", data[29:33])[0]
+    actual_crc = zlib.crc32(b"IHDR" + data[16:29]) & 0xffffffff
+    if stored_crc != actual_crc:
+        fail(path + " has an IHDR chunk with a bad CRC32")
     width, height = struct.unpack(">II", data[16:24])
+    bit_depth = data[24]
+    if bit_depth not in (1, 2, 4, 8, 16):
+        fail("%s has an invalid IHDR bit depth %d" % (path, bit_depth))
+    color_type = data[25]
+    if color_type not in (0, 2, 3, 4, 6):
+        fail("%s has an invalid IHDR color type %d" % (path, color_type))
     if width == 0 or height == 0:
         fail(path + " has zero width or height")
     if width > MAX_SIDE or height > MAX_SIDE:
